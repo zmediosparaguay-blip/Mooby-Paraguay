@@ -1,135 +1,128 @@
 import React, { useState } from 'react'
-import { tripService } from '@/services/tripService'
 import { securityService } from '@/services/securityService'
+import { SUBSCRIPTION_PLANS } from '@/lib/constants'
 
 interface TripRequestProps {
-  passengerId: string
-  onSuccess?: (tripId: string) => void
+  onSubmit: (data: any) => void
+  loading?: boolean
 }
 
-export const TripRequest: React.FC<TripRequestProps> = ({ passengerId, onSuccess }) => {
-  const [pickupAddress, setPickupAddress] = useState('')
-  const [dropoffAddress, setDropoffAddress] = useState('')
-  const [pickupZone, setPickupZone] = useState('')
-  const [dropoffZone, setDropoffZone] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'wallet'>('card')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+export const TripRequest: React.FC<TripRequestProps> = ({ onSubmit, loading = false }) => {
+  const [formData, setFormData] = useState({
+    pickupAddress: '',
+    pickupZone: '',
+    dropoffAddress: '',
+    dropoffZone: '',
+    paymentMethod: 'card',
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [error, setError] = useState<string | null>(null)
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
-    setLoading(true)
+    setError(null)
 
     try {
-      // Verificar si el método de pago es permitido
+      const pickupZone = formData.pickupZone
+      const paymentMethod = formData.paymentMethod
+
       if (!securityService.isPaymentMethodAllowed(paymentMethod, pickupZone)) {
-        throw new Error('No se permite pago en efectivo en esta zona por seguridad')
+        throw new Error('Pago en efectivo no permitido en esta zona por razones de seguridad')
       }
 
-      const tripId = await tripService.createTrip({
-        passengerId,
-        pickupLocation: {
-          address: pickupAddress,
-          cityZone: pickupZone,
-          latitude: 0, // Obtener de mapa real
-          longitude: 0,
-        },
-        dropoffLocation: {
-          address: dropoffAddress,
-          cityZone: dropoffZone,
-          latitude: 0,
-          longitude: 0,
-        },
-        paymentMethod,
-        startTime: new Date(),
-        distance: 0, // Calcular con Maps API
-        fare: 0, // Calcular según distancia
-      })
-
-      onSuccess?.(tripId)
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+      onSubmit(formData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al solicitar viaje')
     }
   }
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Solicitar Viaje</h2>
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Solicitar Viaje</h3>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+          ⚠️ {error}
+        </div>
+      )}
 
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2">Ubicación de Salida</label>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Lugar de Recogida</label>
           <input
             type="text"
-            value={pickupAddress}
-            onChange={(e) => setPickupAddress(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            placeholder="Tu ubicación"
+            name="pickupAddress"
+            value={formData.pickupAddress}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="Tu ubicación actual"
             required
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2">Zona de Salida</label>
-          <input
-            type="text"
-            value={pickupZone}
-            onChange={(e) => setPickupZone(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            placeholder="Zona/Barrio"
-            required
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2">Ubicación de Destino</label>
-          <input
-            type="text"
-            value={dropoffAddress}
-            onChange={(e) => setDropoffAddress(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            placeholder="A dónde vas"
-            required
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2">Zona de Destino</label>
-          <input
-            type="text"
-            value={dropoffZone}
-            onChange={(e) => setDropoffZone(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            placeholder="Zona/Barrio"
-            required
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-2">Método de Pago</label>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Zona</label>
           <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as 'card' | 'wallet')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            name="pickupZone"
+            value={formData.pickupZone}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            required
           >
-            <option value="card">Tarjeta de Crédito</option>
-            <option value="wallet">Billetera Digital</option>
+            <option value="">Selecciona una zona</option>
+            <option value="Centro">Centro</option>
+            <option value="Chacarita">Chacarita</option>
+            <option value="Barrio Obrero">Barrio Obrero</option>
+            <option value="Vista Alegre">Vista Alegre</option>
+            <option value="Bajo Mena">Bajo Mena</option>
+            <option value="Otras">Otras</option>
           </select>
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Destino</label>
+          <input
+            type="text"
+            name="dropoffAddress"
+            value={formData.dropoffAddress}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="¿A dónde vas?"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Método de Pago</label>
+          <select
+            name="paymentMethod"
+            value={formData.paymentMethod}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          >
+            <option value="card">Tarjeta de Crédito/Débito</option>
+            <option value="wallet">Billetera Digital</option>
+            <option value="cash">Efectivo</option>
+          </select>
+        </div>
+
+        {securityService.isHighRiskZone(formData.pickupZone) && (
+          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+            <p className="text-sm text-yellow-800">
+              ℹ️ En esta zona, solo se permiten pagos digitales por seguridad
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+          className="w-full px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 transition"
         >
           {loading ? 'Solicitando...' : 'Solicitar Viaje'}
         </button>

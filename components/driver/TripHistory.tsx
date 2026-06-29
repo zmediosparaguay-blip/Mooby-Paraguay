@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
-import { tripService } from '@/services/tripService'
+import React, { useState, useEffect } from 'react'
 import { Trip } from '@/types'
+import { tripService } from '@/services/tripService'
 
 interface TripHistoryProps {
   driverId: string
@@ -9,6 +9,7 @@ interface TripHistoryProps {
 export const TripHistory: React.FC<TripHistoryProps> = ({ driverId }) => {
   const [trips, setTrips] = useState<Trip[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadTrips()
@@ -19,57 +20,57 @@ export const TripHistory: React.FC<TripHistoryProps> = ({ driverId }) => {
       setLoading(true)
       const driverTrips = await tripService.getDriverTrips(driverId)
       setTrips(driverTrips.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()))
-    } catch (error) {
-      console.error('Error loading trips:', error)
+    } catch (err) {
+      setError('Error al cargar viajes')
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
-  if (loading) {
-    return <div className="text-center py-8">Cargando historial...</div>
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+      completed: { bg: 'bg-green-100', text: 'text-green-800', label: 'Completado' },
+      cancelled: { bg: 'bg-red-100', text: 'text-red-800', label: 'Cancelado' },
+      in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'En progreso' },
+      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pendiente' },
+    }
+    const config = statusConfig[status] || statusConfig.pending
+    return <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>{config.label}</span>
   }
 
-  return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="bg-white shadow rounded-lg p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Historial de Viajes</h2>
+  if (loading) return <div className="text-center py-8 text-gray-600">Cargando viajes...</div>
+  if (error) return <div className="text-center py-8 text-red-600">{error}</div>
+  if (trips.length === 0) return <div className="text-center py-8 text-gray-600">No hay viajes aún</div>
 
-        {trips.length === 0 ? (
-          <p className="text-gray-600 text-center py-8">No hay viajes registrados</p>
-        ) : (
-          <div className="space-y-4">
-            {trips.map((trip) => (
-              <div key={trip.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Salida</p>
-                    <p className="font-semibold text-gray-900">{trip.pickupLocation.address}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Destino</p>
-                    <p className="font-semibold text-gray-900">{trip.dropoffLocation.address}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Ganancia</p>
-                    <p className="font-semibold text-green-600">{trip.fare.toLocaleString()} PYG</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Estado</p>
-                    <span className={`inline-block px-2 py-1 rounded text-sm font-semibold ${
-                      trip.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      trip.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {trip.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold text-gray-900">Historial de Viajes</h3>
+      {trips.map((trip) => (
+        <div key={trip.id} className="p-4 bg-white rounded-lg border border-gray-200">
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <p className="font-medium text-gray-900">{trip.pickupLocation.address}</p>
+              <p className="text-sm text-gray-600">→ {trip.dropoffLocation.address}</p>
+            </div>
+            {getStatusBadge(trip.status)}
           </div>
-        )}
-      </div>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-gray-600">Distancia</p>
+              <p className="font-semibold text-gray-900">{trip.distance.toFixed(1)} km</p>
+            </div>
+            <div>
+              <p className="text-gray-600">Tarifa</p>
+              <p className="font-semibold text-gray-900">₲{trip.fare.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-gray-600">Fecha</p>
+              <p className="font-semibold text-gray-900">{new Date(trip.startTime).toLocaleDateString()}</p>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
